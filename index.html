@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>JSONata test</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsonata/jsonata.min.js"></script>
+    <script src="can-i-use.js"></script>
+    <style>
+      #browsers {
+        background-color: #f0f0f0;
+        padding: 15px;
+        border-radius: 5px;
+        white-space: pre-wrap; /* Перенос строк при необходимости */
+        word-wrap: break-word;
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <pre id="browsers"></pre>
+
+    <script>
+      (async () => {
+        const expression = jsonata(
+          `
+          $each(agents, function($v) {$v[type='desktop']}).
+            ({
+                'browser': browser,
+                'current_version': current_version,
+                'release_date': $fromMillis(version_list[era=0].release_date)
+            })
+        `
+        );
+        const result = await expression.evaluate(data);
+
+        const container = document.getElementById("browsers");
+        container.innerText = JSON.stringify(result, null, 2);
+      })();
+    </script>
+  </body>
+</html>
