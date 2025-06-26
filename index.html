@@ -4,12 +4,13 @@
     <meta charset="UTF-8" />
     <title>JSONata test</title>
     <script src="https://cdn.jsdelivr.net/npm/jsonata/jsonata.min.js"></script>
+
     <style>
       #browsers {
         background-color: #f0f0f0;
         padding: 15px;
         border-radius: 5px;
-        white-space: pre-wrap; /* Перенос строк при необходимости */
+        white-space: pre-wrap;
         word-wrap: break-word;
         font-family: monospace;
       }
@@ -17,8 +18,6 @@
   </head>
   <body>
     <pre id="browsers"></pre>
-
-    <pre id="browsers2"></pre>
 
     <script>
       (async () => {
@@ -29,40 +28,35 @@
         if (!response.ok) {
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
-
         const data = await response.json();
 
         const expression = jsonata(
-          `
-          $each(agents, function($v) {$v[type='desktop']}).
-            ({
-                'browser': browser,
-                'current_version': current_version,
-                'release_date': $fromMillis(version_list[era=0].release_date)
-            })
+          `(
+              $getDate := function($x) {$fromMillis($x * 1000, '[D].[M].[Y]')};
+
+              $getBrowsers := function($z, $x) {(
+                $each($z, function($v) {$v[type=$x]}).
+                  ({
+                      'browser': browser,
+                      'currentVersion': current_version,
+                      'releaseDate': $getDate(version_list[era=0].release_date),
+                      'globalBrowserUsing': $sum(version_list.global_usage) &'%'
+                  })
+              )};
+
+              {
+                'desktop': $getBrowsers(agents, 'desktop'),
+                'mobile': $getBrowsers(agents, 'mobile')
+              };
+            )
         `
         );
         const result = await expression.evaluate(data);
 
-        const container = document.getElementById('browsers');
+        console.log(result);
+
+        const container = document.getElementById("browsers");
         container.innerText = JSON.stringify(result, null, 2);
-
-        const result2 = Object.values(data.agents)
-          .filter((agent) => agent.type === 'desktop')
-          .map((agent) => {
-            const eraZeroVersion = agent.version_list.find((v) => v.era === 0);
-            return eraZeroVersion
-              ? {
-                  browser: agent.browser,
-                  current_version: agent.current_version,
-                  release_date: eraZeroVersion.release_date,
-                }
-              : null;
-          })
-          .filter(Boolean);
-
-        const container2 = document.getElementById('browsers2');
-        container2.innerText = JSON.stringify(result2, null, 2);
       })();
     </script>
   </body>
