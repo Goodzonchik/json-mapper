@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <title>JSONata test</title>
     <script src="https://cdn.jsdelivr.net/npm/jsonata/jsonata.min.js"></script>
-    <script src="can-i-use.js"></script>
     <style>
       #browsers {
         background-color: #f0f0f0;
@@ -19,8 +18,20 @@
   <body>
     <pre id="browsers"></pre>
 
+    <pre id="browsers2"></pre>
+
     <script>
       (async () => {
+        const url = `https://raw.githubusercontent.com/Fyrd/caniuse/refs/heads/main/fulldata-json/data-2.0.json`;
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
         const expression = jsonata(
           `
           $each(agents, function($v) {$v[type='desktop']}).
@@ -33,8 +44,25 @@
         );
         const result = await expression.evaluate(data);
 
-        const container = document.getElementById("browsers");
+        const container = document.getElementById('browsers');
         container.innerText = JSON.stringify(result, null, 2);
+
+        const result2 = Object.values(data.agents)
+          .filter((agent) => agent.type === 'desktop')
+          .map((agent) => {
+            const eraZeroVersion = agent.version_list.find((v) => v.era === 0);
+            return eraZeroVersion
+              ? {
+                  browser: agent.browser,
+                  current_version: agent.current_version,
+                  release_date: eraZeroVersion.release_date,
+                }
+              : null;
+          })
+          .filter(Boolean);
+
+        const container2 = document.getElementById('browsers2');
+        container2.innerText = JSON.stringify(result2, null, 2);
       })();
     </script>
   </body>
