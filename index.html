@@ -6,7 +6,34 @@
     <script src="https://cdn.jsdelivr.net/npm/jsonata/jsonata.min.js"></script>
 
     <style>
-      #browsers {
+      body {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem;
+      }
+
+      .col-left .col-right {
+        width: 50%;
+      }
+
+      .col-left {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      #jsonata {
+        height: 75vh;
+      }
+
+      #result,
+      #query {
         background-color: #f0f0f0;
         padding: 15px;
         border-radius: 5px;
@@ -14,12 +41,62 @@
         word-wrap: break-word;
         font-family: monospace;
       }
+
+      #query {
+        width: 600px;
+        height: 500px;
+      }
+
+      #result {
+        width: 600px;
+      }
+
+      .query-block {
+        width: 100%;
+        margin-bottom: 2rem;
+      }
     </style>
   </head>
   <body>
-    <pre id="browsers"></pre>
+    <div class="col-left">
+      <div class="query-block">
+        <textarea id="query"></textarea>
+        <div>time: <span id="time"></span>ms</div>
+
+        <button onclick="execute()">Выполнить</button>
+      </div>
+
+      <div class="buttons">
+        <button onclick="getFirstBrowser()">Получить первый браузер</button>
+        <button onclick="getRangeBrowser()">Получить первые 3 браузера</button>
+        <button onclick="getLastSecondBrowser()">
+          Получить второй с конца браузер
+        </button>
+
+        <button onclick="getBrowserListWhereMoreThanTenVersion()">
+          Получить список браузеров, у которых больше 10 версий
+        </button>
+
+        <button onclick="get2PercentUsedBrowser()">
+          Получить список браузеров, у которых больше 2% пользователей
+        </button>
+
+        <button onclick="get2PercentUsedBrowserV2()">
+          Получить список браузеров, у которых больше 2% пользователей V2
+        </button>
+
+        <button onclick="getBrowsers()">
+          Получить список браузеров по типам
+        </button>
+      </div>
+    </div>
+    <div class="col-right">
+      <pre id="result"></pre>
+    </div>
 
     <script>
+      let data = null;
+
       (async () => {
         const url = `https://raw.githubusercontent.com/Fyrd/caniuse/refs/heads/main/fulldata-json/data-2.0.json`;
 
@@ -28,36 +105,98 @@
         if (!response.ok) {
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
-        const data = await response.json();
+        data = await response.json();
 
-        const expression = jsonata(
-          `(
-              $getDate := function($x) {$fromMillis($x * 1000, '[D].[M].[Y]')};
-
-              $getBrowsers := function($z, $x) {(
-                $each($z, function($v) {$v[type=$x]}).
-                  ({
-                      'browser': browser,
-                      'currentVersion': current_version,
-                      'releaseDate': $getDate(version_list[era=0].release_date),
-                      'globalBrowserUsing': $sum(version_list.global_usage) &'%'
-                  })
-              )};
-
-              {
-                'desktop': $getBrowsers(agents, 'desktop'),
-                'mobile': $getBrowsers(agents, 'mobile')
-              };
-            )
-        `
-        );
-        const result = await expression.evaluate(data);
-
-        console.log(result);
-
-        const container = document.getElementById("browsers");
-        container.innerText = JSON.stringify(result, null, 2);
+        console.log(data);
       })();
+
+      async function execute() {
+        const query = document.getElementById("query").value;
+        await runEvaluate(query);
+      }
+
+      async function getFirstBrowser() {
+        await runEvaluate(`agents.*[0]`);
+      }
+
+      async function getRangeBrowser() {
+        await runEvaluate(`agents.*[[0..2]]`);
+      }
+
+      async function getLastSecondBrowser() {
+        await runEvaluate(`agents.*[-1]`);
+      }
+
+      async function getBrowserListWhereMoreThanTenVersion() {
+        await runEvaluate(`agents.**[$count(version_list) > 10].browser`);
+      }
+
+      async function get2PercentUsedBrowser() {
+        await runEvaluate(`agents.**[$sum(version_list.global_usage) >= 2].({
+'name': browser,
+'usage': $sum(version_list.global_usage)
+})^(>usage)`);
+      }
+
+      async function get2PercentUsedBrowserV2() {
+        await runEvaluate(`agents.*.({
+'name': browser,
+'usage': $sum(version_list.global_usage)
+})[usage>2]^(>usage)`);
+      }
+
+      async function getBrowsers() {
+        await runEvaluate(`
+/* Есть поддержка комментариев */
+/* Определение методов $getDate и $getBrowsers */
+/* $each проходит массивом по полям объекта */
+/* поиск по предикату $v[type=$x]*/
+/* метод $sum и конкатенация строк */
+        
+(
+  $getDate := function($x) {$fromMillis($x * 1000, '[D].[M].[Y]')};
+
+  $getBrowsers := function($z, $x) {(
+    $each($z, function($v) {$v[type=$x]}).
+      ({
+        'browser': browser,
+        'currentVersion': current_version,
+        'releaseDate': $getDate(version_list[era=0].release_date),
+        'globalBrowserUsing': $sum(version_list.global_usage) & '%'
+      })
+  )};
+
+  {
+    'desktop': $getBrowsers(agents, 'desktop'),
+    'mobile': $getBrowsers(agents, 'mobile')
+  };
+)
+`);
+      }
+
+      async function runEvaluate(query) {
+        const start = performance.now();
+        drawResult(await jsonata(query).evaluate(data));
+        drawQuery(query);
+
+        const end = performance.now();
+        drawStats((end - start).toFixed(2));
+      }
+
+      function drawResult(result) {
+        const container = document.getElementById("result");
+        container.innerText = JSON.stringify(result, null, 2);
+      }
+
+      function drawQuery(query) {
+        const queryBlock = document.getElementById("query");
+        queryBlock.value = query;
+      }
+
+      function drawStats(time) {
+        const timeBlock = document.getElementById("time");
+        timeBlock.innerText = time;
+      }
     </script>
   </body>
 </html>
